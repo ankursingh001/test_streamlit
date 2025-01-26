@@ -1,0 +1,4 @@
+Name,Age,Details
+Alice,25,"{""hobbies"": [""reading"", ""hiking""], ""city"": ""New York""}"
+Bob,30,"{""hobbies"": [""movies"", ""sports""], ""city"": ""Los Angeles""}"
+Charlie,35,"{""hobbies"": [""music"", ""art""], ""city"": ""Chicago""}"

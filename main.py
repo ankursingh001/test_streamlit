@@ -2,17 +2,19 @@ import json
 import streamlit as st
 import pandas as pd
 
-# Sample DataFrame with a JSON column
-data = {
-    'Name': ['Alice', 'Bob', 'Charlie'],
-    'Age': [25, 30, 35],
-    'Details': [
-        json.dumps({"hobbies": ["reading", "hiking"], "city": "New York"}),
-        json.dumps({"hobbies": ["movies", "sports"], "city": "Los Angeles"}),
-        json.dumps({"hobbies": ["music", "art"], "city": "Chicago"})
-    ]
-}
-df = pd.DataFrame(data)
+# Load data from a CSV file
+def load_data_from_csv(file_path):
+    return pd.read_csv(file_path)
+
+# Specify the path to your CSV file
+file_path = 'data.csv'  # Update this to your actual file path
+df = load_data_from_csv(file_path)
+
+# Reset index if it is a MultiIndex
+if isinstance(df.index, pd.MultiIndex):
+    df = df.reset_index()
+
+
 
 # Display the data editor for direct editing
 edited_df = st.data_editor(df, num_rows="dynamic")  # Allows direct editing of the DataFrame
@@ -29,4 +31,3 @@ else:
 # Display the current state of the DataFrame
 st.write("### Previous DataFrame")
 st.dataframe(df)
-
