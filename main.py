@@ -1,8 +1,19 @@
 import streamlit as st
 import pandas as pd
 
-def add_buttons(row):
-    return row.append(pd.Series([st.button('Edit', key=f'edit{row.name}'), st.button('Delete', key=f'delete{row.name}')]))
+
+def add_buttons(df, columns):
+    # Handle button clicks based on row index
+    for index, row in df.iterrows():
+        for i, column in enumerate(df.columns):
+            columns[i].write(row[column])  # Show data in respective column
+        if columns[-3].button('DELETE', key=f'delete_{index}'):
+            st.write(f"You clicked DELETE for {row['Name']}")
+        if columns[-2].button('EDIT', key=f'edit_{index}'):
+            st.write(f"You clicked EDIT for {row['Name']}")
+        if columns[-1].button('SHOW', key=f'show_{index}'):
+            if st.button('SHOW', key=f'show_{index}'):
+                st.write(f"You clicked SHOW for {row['Name']}")
 
 
 # Create a DataFrame with 10 rows and additional columns
@@ -14,26 +25,18 @@ data = {
 }
 
 
-df = pd.DataFrame(data)
-df.apply(add_buttons, axis=1)
-
-for index, row in df.iterrows():
-    st.write(row)
-
-# Title of the app
 st.title("Streamlit Table with Action Column")
 
+df = pd.DataFrame(data)
+# Number of columns to display (including buttons)
+num_columns = len(df.columns) + 3 # Adding three buttons
+columns = st.columns(num_columns)  # Create the columns
+
+# Title of the app
+
+add_buttons(df, columns)
 
 # Display the DataFrame with actions included
 st.dataframe(df)
 
-# Handle button clicks based on row index
-for index, row in df.iterrows():
-    if st.button("Show", key=f"{row.name}"):
-        st.write(f"You clicked Show for Row {index + 1}")
 
-    if st.button("Edit", key=f"{row.name}"):
-        st.write(f"You clicked Edit for Row {index + 1}")
-
-    if st.button("Delete", key=f"{row.name}"):
-        st.write(f"You clicked Delete for Row {index + 1}")
