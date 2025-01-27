@@ -33,6 +33,17 @@ def handle_delete(df):
     st.write("### Selected rows")
     if sel_row is not None:
         st.write(sel_row)
+        # Add a Delete button
+        if st.button("Delete Selected Rows"):
+            selected_rows = grid_table["selected_rows"]
+            if selected_rows:
+                # Get the indices of the rows to delete
+                indices_to_delete = [row['index'] for row in selected_rows]
+                df.drop(indices_to_delete, inplace=True)  # Drop rows from original DataFrame
+                df.reset_index(drop=True, inplace=True)  # Reset index after deletion
+                st.success("Selected rows have been deleted successfully!")
+            else:
+                st.warning("No rows selected for deletion.")
     else:
         st.write("No rows selected.")  # Message if no rows are selected
 
