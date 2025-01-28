@@ -26,7 +26,6 @@ def get_grid_by_operation(df, operation):
 
 
 def handle_delete(df):
-    print("jere")
     st.write("### Delete data")
     grid_table = get_grid_by_operation(df, Action.DELETE)
     sel_row = grid_table["selected_rows"]
@@ -36,9 +35,10 @@ def handle_delete(df):
         # Add a Delete button
         if st.button("Delete Selected Rows"):
             selected_rows = grid_table["selected_rows"]
-            if selected_rows:
+            if not selected_rows.empty:
                 # Get the indices of the rows to delete
-                indices_to_delete = [row['index'] for row in selected_rows]
+                indices_to_delete = selected_rows.index.tolist()
+                indices_to_delete = [int(index) for index in indices_to_delete]
                 df.drop(indices_to_delete, inplace=True)  # Drop rows from original DataFrame
                 df.reset_index(drop=True, inplace=True)  # Reset index after deletion
                 st.success("Selected rows have been deleted successfully!")
