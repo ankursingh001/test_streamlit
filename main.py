@@ -11,9 +11,9 @@ from helper import Action, get_grid_by_operation, handle_action
 file_path = "data.csv"
 
 
-@st.cache_data
-def read_data():
-    return pd.read_csv(file_path)
+# @st.cache_data
+# def read_data():
+#     return pd.read_csv(file_path)
 
 
 df = get_data_frame_from_es("search_query_meta")

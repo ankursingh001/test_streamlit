@@ -49,6 +49,7 @@ def handle_delete(df):
 
 
 def handle_upsert(df):
+    print("handle upsert")
     original_df = df.copy()
     grid_table = get_grid_by_operation(df, Action.UPSERT)
     updated_df = grid_table['data']
@@ -56,11 +57,11 @@ def handle_upsert(df):
     # To ensure comparison works, reset the index of both DataFrames
     original_df = original_df.reset_index(drop=True)
     updated_df = updated_df.reset_index(drop=True)
-
     # Identify rows that have been updated
-    changes_mask = (original_df != updated_df)  # Create a mask of changes
+    changes_mask = (updated_df.ne(original_df))  # Create a mask of changes
+    print(f"updated df dtypes: {updated_df.dtypes} and original df dtypes: {original_df.dtypes}")
     updated_rows = updated_df[changes_mask.any(axis=1)]  # Select only changed rows
-
+    print(f"updated rows {updated_rows}")
     if not updated_rows.empty:
         # Style the updated rows to highlight changes
         st.write("### Updated Rows")
