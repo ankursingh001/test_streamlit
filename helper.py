@@ -42,6 +42,8 @@ def handle_delete(df):
                 df.drop(indices_to_delete, inplace=True)  # Drop rows from original DataFrame
                 df.reset_index(drop=True, inplace=True)  # Reset index after deletion
                 st.success("Selected rows have been deleted successfully!")
+                st.write("### Updated dataframe")
+                st.dataframe(df)  # Display the updated DataFrame
             else:
                 st.warning("No rows selected for deletion.")
     else:

@@ -45,11 +45,11 @@ def get_data_frame_from_es(index):
         index=index,  # Replace with the name of your index
         body={
             "query": {
-                "match_all": {}  # Modify the query as needed
-            }
+                "match_all": {}
+            },
+            "size": 10000  # Set to a number that encompasses all expected results (maximum is 10000)
         }
     )
-
     hits = response['hits']['hits']
     # Extract source data to a pandas DataFrame
     data = [hit['_source'] for hit in hits]
@@ -66,4 +66,3 @@ def get_data_frame_from_es(index):
     print(df)
     df.fillna('', inplace=True)
     return df
-# print(get_data_frame_from_es("search_query_meta"))
