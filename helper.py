@@ -1,9 +1,6 @@
 from enum import Enum
 import streamlit as st
 from st_aggrid import GridOptionsBuilder, GridUpdateMode, AgGrid
-from elasticsearch import helpers
-
-from es_connector import write_data_to_es
 
 
 class Action(Enum):
@@ -27,7 +24,7 @@ def get_grid_by_operation(df, operation):
     return AgGrid(df, gridOptions=grid_options, update_mode=update_mode, allow_unsafe_jscode=True, height=500, theme='fresh')
 
 
-def handle_delete(df):
+def handle_delete(wrapper, df):
     st.write("### Delete data")
     grid_table = get_grid_by_operation(df, Action.DELETE)
     sel_row = grid_table["selected_rows"]
@@ -52,7 +49,7 @@ def handle_delete(df):
         st.write("No rows selected.")  # Message if no rows are selected
 
 
-def handle_upsert(df):
+def handle_upsert(wrapper, df):
     print("handle upsert")
     original_df = df.copy()
     grid_table = get_grid_by_operation(df, Action.UPSERT)
@@ -77,7 +74,7 @@ def handle_upsert(df):
                 df.loc[index] = updated_rows.loc[index]  # Update original df at the index of updated rows
             st.success("Changes have been submitted successfully!")
 
-            write_data_to_es(df)
+            wrapper.write_data(df)
     else:
         st.write("No rows have been updated.")
 
@@ -88,6 +85,6 @@ action_handler_registery = {
 }
 
 
-def handle_action(action, df):
+def handle_action(action, wrapper, df):
     handler = action_handler_registery.get(action)
-    handler(df)
+    handler(wrapper, df)
