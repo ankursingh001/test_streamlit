@@ -1,7 +1,9 @@
 from enum import Enum
 import streamlit as st
-import pandas as pd
 from st_aggrid import GridOptionsBuilder, GridUpdateMode, AgGrid
+from elasticsearch import helpers
+
+from es_connector import write_data_to_es
 
 
 class Action(Enum):
@@ -37,7 +39,7 @@ def handle_delete(df):
             selected_rows = grid_table["selected_rows"]
             if not selected_rows.empty:
                 # Get the indices of the rows to delete
-                indices_to_delete = selected_rows.index.tolist()
+                indices_to_delete = selected_rows.index_alias.tolist()
                 indices_to_delete = [int(index) for index in indices_to_delete]
                 df.drop(indices_to_delete, inplace=True)  # Drop rows from original DataFrame
                 df.reset_index(drop=True, inplace=True)  # Reset index after deletion
@@ -74,8 +76,8 @@ def handle_upsert(df):
             for index in updated_rows.index:
                 df.loc[index] = updated_rows.loc[index]  # Update original df at the index of updated rows
             st.success("Changes have been submitted successfully!")
-            st.write("### Updated dataframe")
-            st.dataframe(df)  # Display the updated DataFrame
+
+            write_data_to_es(df)
     else:
         st.write("No rows have been updated.")
 
