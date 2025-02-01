@@ -1,7 +1,7 @@
 import streamlit as st
 
 from es_connector import  wrapper
-from helper import handle_action
+from helper import handle_action, Action
 
 file_path = "data.csv"
 
@@ -29,7 +29,7 @@ st.session_state.input = input
 
 # Sidebar for actions
 st.sidebar.header("Actions")
-action = st.sidebar.selectbox("Choose an action:", options=["upsert", "delete"])
+action = st.sidebar.selectbox("Choose an action:", options=[Action.UPDATE.value, Action.INSERT.value, Action.DELETE.value])
 handle_action(action)
 
 

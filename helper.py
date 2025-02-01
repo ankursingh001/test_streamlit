@@ -1,3 +1,5 @@
+import base64
+import uuid
 from enum import Enum
 
 import pandas as pd
@@ -10,17 +12,18 @@ OPERATION_LIMIT = 50
 
 
 class Action(Enum):
-    UPSERT = "upsert"
+    UPDATE = "update"
     DELETE = "delete"
+    INSERT = "insert"
 
 
 def get_grid_by_operation(operation):
     if not operation:
-        operation = Action.UPSERT
+        operation = Action.UPDATE
     df = wrapper.get_df()
-    gd = GridOptionsBuilder.from_dataframe(df)
     sel_mode = st.radio('Selection type', options=["single", "multiple"])
 
+    gd = GridOptionsBuilder.from_dataframe(df)
     # Create a wrapper for the handle_pagination_change function to accept df
 
     gd.configure_pagination(enabled=False, paginationPageSize=st.session_state.page_size)
@@ -29,7 +32,7 @@ def get_grid_by_operation(operation):
 
     grid_options = gd.build()
 
-    update_mode = GridUpdateMode.VALUE_CHANGED if operation == Action.UPSERT else GridUpdateMode.SELECTION_CHANGED
+    update_mode = GridUpdateMode.VALUE_CHANGED if operation == Action.UPDATE else GridUpdateMode.SELECTION_CHANGED
 
     return AgGrid(df, gridOptions=grid_options, update_mode=update_mode, allow_unsafe_jscode=True, height=500, theme='fresh')
 
@@ -60,7 +63,7 @@ def handle_delete():
         st.write("No rows selected.")  # Message if no rows are selected
 
 
-def handle_upsert():
+def handle_update():
     def show_changed_rows(updated_rows):
         # Prepare to store the changed values
         changed_info = []
@@ -78,7 +81,7 @@ def handle_upsert():
             changed_info.append(changed_row)
         changed_df = pd.DataFrame(changed_info)
         st.write(changed_df)
-    grid_table = get_grid_by_operation(Action.UPSERT)
+    grid_table = get_grid_by_operation(Action.UPDATE)
 
     # Create columns for inline display
     col1, col2, col3 = st.columns([3, 2, 1])  # Adjust the column sizes if necessary
@@ -129,10 +132,14 @@ def handle_upsert():
     else:
         st.write("No rows have been updated.")
 
+def handle_insert():
+    pass
+
 
 action_handler_registery = {
-    Action.UPSERT.value: handle_upsert,
-    Action.DELETE.value: handle_delete
+    Action.UPDATE.value: handle_update,
+    Action.DELETE.value: handle_delete,
+    Action.INSERT.value: handle_insert
 }
 
 
