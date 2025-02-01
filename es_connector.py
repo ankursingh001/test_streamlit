@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
 
+import pandas as pd
 from pandas import json_normalize
 import streamlit as st
 
@@ -37,6 +38,7 @@ class EsWrapper(ABC):
     def get_df(self, query):
         pass
 
+
 class SearchQueryMetaWrapper(EsWrapper):
     index_alias = "search_query_meta"
 
@@ -50,7 +52,6 @@ class SearchQueryMetaWrapper(EsWrapper):
         # Extract mappings for the first index (you can modify to handle multiple indices)
         index_mapping = mappings[SearchQueryMetaWrapper.index_alias]['mappings']
         properties = index_mapping.get('properties', {})
-
         # Prepare the schema object
         schema = {}
         schema["_id"] = 'str'
@@ -61,8 +62,8 @@ class SearchQueryMetaWrapper(EsWrapper):
                 schema[field] = es_to_pd_dtype[field_type]
         return schema
 
-    def get_df(self, query):
-        hits = self.read_data(query)
+    def get_df(self):
+        hits = self.read_data(st.session_state.input, st.session_state.page, st.session_state.page_size)
         if hits:
             # Extract source data to a pandas DataFrame
             data = [{**hit['_source'], '_id': hit['_id']} for hit in hits]
@@ -79,26 +80,56 @@ class SearchQueryMetaWrapper(EsWrapper):
             df.fillna('', inplace=True)
             st.session_state.current_df = df
             return df
+        return pd.DataFrame()
 
-    def read_data(self, query):
+    def read_data(_self, query, page, page_size):
         # Example query to retrieve documents
-        response = None
-        page = st.session_state.current_page
+        page = st.session_state.page
         page_size = st.session_state.page_size
-        st.session_state.grid_data = []
+
+        # Step 1: Check total hits
         if not query:
-            response = self.client.search(
-                index=self.index_alias,  # Replace with the name of your index
+            total_page_query = {
+                "query": {
+                    "match_all": {}
+                }
+            }
+        else:
+            total_page_query = {
+                "query": {
+                    "multi_match": {
+                        "query": query,
+                        "fields": ["*"]
+                    }
+                }
+            }
+        page_response = _self.client.search(index=_self.index_alias, body=total_page_query, size=0)  # size=0 to avoid returning actual documents
+
+        total_hits = page_response['hits']['total']['value']  # For ES 7.x and above
+
+        max_pages = (total_hits + page_size - 1) // page_size  # Calculate maximum number of pages
+        page = min(max_pages, page)
+
+        if not query:
+            response = _self.client.search(
+                index=_self.index_alias,  # Replace with the name of your index
                 body={
                     "query": {
                         "match_all": {}
                     },
                     "size": page_size,
-                    "from": (page - 1) * page_size
+                    "from": (page - 1) * page_size,
+                    "sort": [
+                        {
+                            "_score": {  # Sort by relevance score
+                                "order": "desc"
+                            }
+                        }
+                    ]
                 }
             )
         else:
-            response = self.client.search(index=self.index_alias, body={
+            response = _self.client.search(index=_self.index_alias, body={
                 "query": {
                     "multi_match": {
                         "query": query,
@@ -106,7 +137,14 @@ class SearchQueryMetaWrapper(EsWrapper):
                     }
                 },
                 "size": page_size,
-                "from": (page - 1) * page_size
+                "from": (page - 1) * page_size,
+                "sort": [
+                    {
+                        "_score": {  # Sort by relevance score
+                            "order": "desc"
+                        }
+                    }
+                ],
             })
         hits = response['hits']['hits']
         if not hits:
@@ -140,7 +178,7 @@ class SearchQueryMetaWrapper(EsWrapper):
                         print(f"Failed to index document ID: {item['index']['_id']}, Error: {item['index']['error']}")
             return
 
-    def delete_data(self, df, sel_row):
+    def delete_data(self, sel_row):
         st.write("### Delete data")
         if sel_row is not None:
             st.write(sel_row)

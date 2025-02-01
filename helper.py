@@ -4,8 +4,9 @@ import pandas as pd
 import streamlit as st
 from st_aggrid import GridOptionsBuilder, GridUpdateMode, AgGrid
 
+from es_connector import wrapper
+
 OPERATION_LIMIT = 50
-page_size = 20
 
 
 class Action(Enum):
@@ -13,44 +14,29 @@ class Action(Enum):
     DELETE = "delete"
 
 
-def on_page_changed(event):
-    # Check if the new page event was triggered
-    if event.newPage:
-        new_page = event.api.paginationGetCurrentPage() + 1  # Get the new page number (zero-indexed)
-
-        # # Determine whether to fetch more data
-        # if len(st.session_state.grid_data) < new_page * page_size:  # If current data is less than expected
-        #     fetch_result = wrapper.read_data(query)
-        #
-        #     if fetch_result:
-        #         for hit in fetch_result:
-        #             st.session_state.grid_data.append(hit['_source'])  # Append new results
-        #         st.session_state.current_page = new_page  # Update the current page
-        #     else:
-        #         st.write("No more results found.")
-        # else:
-        #     st.session_state.current_page = new_page  # Update the current page
-
-
-def get_grid_by_operation(df, operation):
+def get_grid_by_operation(operation):
     if not operation:
         operation = Action.UPSERT
+    df = wrapper.get_df()
     gd = GridOptionsBuilder.from_dataframe(df)
     sel_mode = st.radio('Selection type', options=["single", "multiple"])
 
-    gd.configure_pagination(enabled=True)
+    # Create a wrapper for the handle_pagination_change function to accept df
+
+    gd.configure_pagination(enabled=False, paginationPageSize=st.session_state.page_size)
     gd.configure_default_column(editable=True, groupable=True, resizable=True, sortable=True, filter=True)
     gd.configure_selection(selection_mode=sel_mode, use_checkbox=True)
 
     grid_options = gd.build()
+
     update_mode = GridUpdateMode.VALUE_CHANGED if operation == Action.UPSERT else GridUpdateMode.SELECTION_CHANGED
 
     return AgGrid(df, gridOptions=grid_options, update_mode=update_mode, allow_unsafe_jscode=True, height=500, theme='fresh')
 
 
-def handle_delete(wrapper, df):
+def handle_delete():
     st.write("### Delete data")
-    grid_table = get_grid_by_operation(df, Action.DELETE)
+    grid_table = get_grid_by_operation(Action.DELETE)
     sel_row = grid_table["selected_rows"]
     st.write("### Selected rows")
     if sel_row is not None:
@@ -64,7 +50,7 @@ def handle_delete(wrapper, df):
             if not selected_rows.empty:
                 st.success("Selected rows have been deleted successfully!")
                 try:
-                    wrapper.delete_data(df, selected_rows)
+                    wrapper.delete_data(selected_rows)
                     st.rerun(scope="app")
                 except Exception as e:
                     st.error(f"An error occurred while deleting data from Elasticsearch: {e}")
@@ -74,7 +60,7 @@ def handle_delete(wrapper, df):
         st.write("No rows selected.")  # Message if no rows are selected
 
 
-def handle_upsert(wrapper, df):
+def handle_upsert():
     def show_changed_rows(updated_rows):
         # Prepare to store the changed values
         changed_info = []
@@ -92,18 +78,34 @@ def handle_upsert(wrapper, df):
             changed_info.append(changed_row)
         changed_df = pd.DataFrame(changed_info)
         st.write(changed_df)
+    grid_table = get_grid_by_operation(Action.UPSERT)
 
-    if "current_df" not in st.session_state:
-        st.error("Current DataFrame not found. Please load data first.")
-        return
-    original_df = df.copy()
-    grid_table = get_grid_by_operation(original_df, Action.UPSERT)
+    # Create columns for inline display
+    col1, col2, col3 = st.columns([3, 2, 1])  # Adjust the column sizes if necessary
+
+    with col1:
+        if st.button("Next"):
+            st.session_state.page += 1  # Increment page number
+            st.rerun()
+
+    with col2:
+        if st.button("Prev"):
+            if st.session_state.page > 1:
+                st.session_state.page -= 1  # Decrement page number
+                st.rerun()
+
+    with col3:
+        st.write(f"### Page {st.session_state.page}")
+
     # Show success message if it exists
     if 'success_message' in st.session_state:
         st.success(st.session_state.success_message)
         del st.session_state.success_message  # Optionally clear the message after displaying
     updated_df = grid_table['data'].copy()
-
+    original_df = wrapper.get_df()
+    if original_df.empty:
+        st.error("No data found in Elasticsearch.")
+        return
     # To ensure comparison works, reset the index of both DataFrames
     original_df = original_df.reset_index(drop=True)
     updated_df = updated_df.reset_index(drop=True)
@@ -134,6 +136,6 @@ action_handler_registery = {
 }
 
 
-def handle_action(action, wrapper, df):
+def handle_action(action):
     handler = action_handler_registery.get(action)
-    handler(wrapper, df)
+    handler()
