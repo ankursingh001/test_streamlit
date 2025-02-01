@@ -43,7 +43,6 @@ def get_grid_by_operation(df, operation):
     gd.configure_selection(selection_mode=sel_mode, use_checkbox=True)
 
     grid_options = gd.build()
-    st.write()
     update_mode = GridUpdateMode.VALUE_CHANGED if operation == Action.UPSERT else GridUpdateMode.SELECTION_CHANGED
 
     return AgGrid(df, gridOptions=grid_options, update_mode=update_mode, allow_unsafe_jscode=True, height=500, theme='fresh')
@@ -63,20 +62,19 @@ def handle_delete(wrapper, df):
         if st.button("Delete Selected Rows"):
             selected_rows = grid_table["selected_rows"]
             if not selected_rows.empty:
-                # Get the indices of the rows to delete
-                indices_to_delete = selected_rows.index.tolist()
-                indices_to_delete = [int(index) for index in indices_to_delete]
-                df.drop(indices_to_delete, inplace=True)  # Drop rows from original DataFrame
-                df.reset_index(drop=True, inplace=True)  # Reset index after deletion
                 st.success("Selected rows have been deleted successfully!")
-                wrapper.delete_data(df, selected_rows)
+                try:
+                    wrapper.delete_data(df, selected_rows)
+                    st.rerun(scope="app")
+                except Exception as e:
+                    st.error(f"An error occurred while deleting data from Elasticsearch: {e}")
             else:
                 st.warning("No rows selected for deletion.")
     else:
         st.write("No rows selected.")  # Message if no rows are selected
 
 
-def handle_upsert(wrapper):
+def handle_upsert(wrapper, df):
     def show_changed_rows(updated_rows):
         # Prepare to store the changed values
         changed_info = []
@@ -98,8 +96,12 @@ def handle_upsert(wrapper):
     if "current_df" not in st.session_state:
         st.error("Current DataFrame not found. Please load data first.")
         return
-    original_df = st.session_state.current_df.copy()
+    original_df = df.copy()
     grid_table = get_grid_by_operation(original_df, Action.UPSERT)
+    # Show success message if it exists
+    if 'success_message' in st.session_state:
+        st.success(st.session_state.success_message)
+        del st.session_state.success_message  # Optionally clear the message after displaying
     updated_df = grid_table['data'].copy()
 
     # To ensure comparison works, reset the index of both DataFrames
@@ -117,10 +119,11 @@ def handle_upsert(wrapper):
         show_changed_rows(updated_rows)
         # Add a Submit button
         if st.button("Submit Changes"):
-            # Update the original DataFrame with changes from updated_rows
-            for index in updated_rows.index:
-                st.session_state.current_df.loc[index] = updated_rows.loc[index]  # Update original df at the index of updated rows
-            wrapper.write_data(updated_rows)
+            try:
+                wrapper.write_data(updated_rows)
+                st.rerun(scope="app")
+            except Exception as e:
+                st.error(f"An error occurred while writing data to Elasticsearch: {e}")
     else:
         st.write("No rows have been updated.")
 
@@ -131,6 +134,6 @@ action_handler_registery = {
 }
 
 
-def handle_action(action, wrapper):
+def handle_action(action, wrapper, df):
     handler = action_handler_registery.get(action)
-    handler(wrapper)
+    handler(wrapper, df)

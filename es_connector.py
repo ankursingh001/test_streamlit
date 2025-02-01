@@ -128,10 +128,10 @@ class SearchQueryMetaWrapper(EsWrapper):
         try:
             # Use bulk helper to index documents
             response = helpers.bulk(self.client, actions)
-            st.success("Data has been written to Elasticsearch!")
+            st.session_state.success_message = "Data has been written to Elasticsearch!"
         except Exception as e:
             # Attempt to delete the index if the bulk operation fails
-            st.error(f"An error occurred while writing data to Elasticsearch: {e}")
+            st.session_state.error_message = f"An error occurred while writing data to Elasticsearch: {e}"
             # Print response if available
             if 'items' in response:
                 for item in response['items']:
@@ -150,13 +150,13 @@ class SearchQueryMetaWrapper(EsWrapper):
                     doc_id = row[1]['_id']
                     try:
                         self.client.delete(index=self.index_alias, id=doc_id)
-                        st.success(f"Deleted document with ID: {doc_id} from Elasticsearch.")
+                        st.session_state.success_message = f"Deleted document with ID: {doc_id} from Elasticsearch."
                     except NotFoundError:
-                        st.warning(f"Document with ID: {doc_id} not found in Elasticsearch.")
+                        st.session_state.warning_message = f"Document with ID: {doc_id} not found in Elasticsearch."
                     except Exception as e:
-                        st.error(f"Error deleting document ID {doc_id}: {e}")
+                        st.session_state.error_message = f"Error deleting document ID {doc_id}: {e}"
             else:
-                st.warning("No rows selected for deletion.")
+                 st.session_state.error_message = "No rows selected for deletion."
 
 client = Elasticsearch("http://localhost:9200")
 wrapper = SearchQueryMetaWrapper(client)
