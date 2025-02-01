@@ -4,7 +4,7 @@ from datetime import datetime
 from pandas import json_normalize
 import streamlit as st
 
-from elasticsearch import helpers
+from elasticsearch import helpers, NotFoundError, Elasticsearch
 
 # Map Elasticsearch types to pandas types
 es_to_pd_dtype = {
@@ -18,6 +18,8 @@ es_to_pd_dtype = {
     "date": 'datetime64[ns]',  # pandas datetime type
 }
 
+
+
 class EsWrapper(ABC):
     def __init__(self, index_name, client):
         self.index_name = index_name
@@ -25,13 +27,15 @@ class EsWrapper(ABC):
         self.schema = None
 
     @abstractmethod
-    def read_data(self):
+    def read_data(self, query):
         pass
 
     @abstractmethod
-    def write_data(self):
+    def write_data(self, df):
         pass
-
+    @abstractmethod
+    def get_df(self, query):
+        pass
 
 class SearchQueryMetaWrapper(EsWrapper):
     index_alias = "search_query_meta"
@@ -49,6 +53,7 @@ class SearchQueryMetaWrapper(EsWrapper):
 
         # Prepare the schema object
         schema = {}
+        schema["_id"] = 'str'
         self.client.indices.get_mapping(index=SearchQueryMetaWrapper.index_alias)
         for field, details in properties.items():
             field_type = details.get('type')
@@ -56,55 +61,68 @@ class SearchQueryMetaWrapper(EsWrapper):
                 schema[field] = es_to_pd_dtype[field_type]
         return schema
 
-    @st.cache_data
-    def read_data(_self):
+    def get_df(self, query):
+        hits = self.read_data(query)
+        if hits:
+            # Extract source data to a pandas DataFrame
+            data = [{**hit['_source'], '_id': hit['_id']} for hit in hits]
+            df = json_normalize(data)
+            # Step 5: Apply schema to DataFrame
+            for column, dtype in self.schema.items():
+                if column in df.columns:
+                    if dtype == bool:
+                        df[column] = df[column].map({"True": True, "False": False})
+                    else:
+                        df[column] = df[column].astype(dtype)
+            column_order = ['_id'] + [col for col in df.columns if col != '_id']
+            df = df[column_order]  # Reorder the DataFrame
+            df.fillna('', inplace=True)
+            st.session_state.current_df = df
+            return df
+
+    def read_data(self, query):
         # Example query to retrieve documents
-        response = _self.client.search(
-            index=_self.index_alias,  # Replace with the name of your index
-            body={
+        response = None
+        page = st.session_state.current_page
+        page_size = st.session_state.page_size
+        st.session_state.grid_data = []
+        if not query:
+            response = self.client.search(
+                index=self.index_alias,  # Replace with the name of your index
+                body={
+                    "query": {
+                        "match_all": {}
+                    },
+                    "size": page_size,
+                    "from": (page - 1) * page_size
+                }
+            )
+        else:
+            response = self.client.search(index=self.index_alias, body={
                 "query": {
-                    "match_all": {}
+                    "multi_match": {
+                        "query": query,
+                        "fields": ["*"]  # Search across all fields
+                    }
                 },
-                "size": 10000  # Set to a number that encompasses all expected results (maximum is 10000)
-            }
-        )
+                "size": page_size,
+                "from": (page - 1) * page_size
+            })
         hits = response['hits']['hits']
-        # Extract source data to a pandas DataFrame
-        data = [hit['_source'] for hit in hits]
-        df = json_normalize(data)
-        # Step 5: Apply schema to DataFrame
-        for column, dtype in _self.schema.items():
-            if column in df.columns:
-                if dtype == bool:
-                    df[column] = df[column].map({"True": True, "False": False})
-                else:
-                    df[column] = df[column].astype(dtype)
+        if not hits:
+            st.error("ES returned no results.")
+            return None
+        return hits
 
-        # Step 6: Display the resulting DataFrame and its dtypes
-        print(df)
-        df.fillna('', inplace=True)
-        return df
-
-    def write_data(self, df):
+    def write_data(self, updated_rows):
         # Convert the DataFrame to a format suitable for Elasticsearch
-        records = df.to_dict(orient='records')  # Convert to list of dictionaries
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        index_name = f"search_query_meta-{timestamp}"
-        # Retrieve the mapping from the existing index
-        mapping = self.client.indices.get_mapping(index=SearchQueryMetaWrapper.index_alias)
-        # Use the mapping of the first index in case of multiple index aliases
-        index_mapping = mapping[SearchQueryMetaWrapper.index_alias]['mappings']
-
-        # Create the new index with the retrieved mapping
-        self.client.indices.create(index=index_name, body={"mappings": index_mapping})
-        # Prepare actions for the bulk API
         actions = [
             {
-                "_index": index_name,  # Replace with your desired index name
-                "_id": index,  # Optional: use index or a field value as the document ID
-                "_source": record
+                "_index": SearchQueryMetaWrapper.index_alias,  # Replace with your desired index name
+                "_id": record["_id"],  # Optional: use index or a field value as the document ID
+                "_source": {key: value for key, value in record.items() if key != "_id"}
             }
-            for index, record in zip(df.index, records)  # Create action for each record
+            for record in updated_rows.to_dict(orient='records')
         ]
         response = None
         try:
@@ -120,22 +138,25 @@ class SearchQueryMetaWrapper(EsWrapper):
                     # Check for failures
                     if 'index' in item and 'error' in item['index']:
                         print(f"Failed to index document ID: {item['index']['_id']}, Error: {item['index']['error']}")
-            if self.client.indices.exists(index=index_name):
-                self.client.indices.delete(index=index_name)
-                st.info(f"Deleted index: {index_name}")
             return
-        try:
-            # Point the alias to the new index
-            self.client.indices.update_aliases(
-                actions=[
-                    {"remove": {"index": SearchQueryMetaWrapper.index_alias, "alias": "search_query_meta"}},
-                    {"add": {"index": index_name, "alias": "search_query_meta"}}
-                ])
 
-            st.success(f"Alias 'search_query_meta' has been pointed to the new index {index_name}.")
-        except Exception as e:
-            st.error(f"An error occurred while updating the alias: {e}")
-            st.error(f"Please ensure that the alias {SearchQueryMetaWrapper.index_alias} is correctly set up.")
+    def delete_data(self, df, sel_row):
+        st.write("### Delete data")
+        if sel_row is not None:
+            st.write(sel_row)
+            # Add a Delete button
+            if not sel_row.empty:
+                for row in sel_row.iterrows():
+                    doc_id = row[1]['_id']
+                    try:
+                        self.client.delete(index=self.index_alias, id=doc_id)
+                        st.success(f"Deleted document with ID: {doc_id} from Elasticsearch.")
+                    except NotFoundError:
+                        st.warning(f"Document with ID: {doc_id} not found in Elasticsearch.")
+                    except Exception as e:
+                        st.error(f"Error deleting document ID {doc_id}: {e}")
+            else:
+                st.warning("No rows selected for deletion.")
 
-
-
+client = Elasticsearch("http://localhost:9200")
+wrapper = SearchQueryMetaWrapper(client)
