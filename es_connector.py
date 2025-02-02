@@ -20,7 +20,6 @@ es_to_pd_dtype = {
 }
 
 
-
 class EsWrapper(ABC):
     def __init__(self, index_name, client):
         self.index_name = index_name
