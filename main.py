@@ -24,6 +24,7 @@ if 'warning_message' in st.session_state:
     st.warning(st.session_state.warning_message)
     del st.session_state.warning_message
 
+
 input = st.text_input("Enter a search term. It will be matched across all fields.")
 st.session_state.input = input
 

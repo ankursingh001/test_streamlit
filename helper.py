@@ -114,12 +114,15 @@ def handle_update():
         del st.session_state.success_message  # Optionally clear the message after displaying
     updated_df = grid_table['data'].copy()
     original_df = wrapper.get_df()
+
     if original_df.empty:
         st.error("No data found in Elasticsearch.")
         return
     # To ensure comparison works, reset the index of both DataFrames
     original_df = original_df.reset_index(drop=True)
     updated_df = updated_df.reset_index(drop=True)
+
+    original_df = original_df[original_df['_id'].isin(updated_df['_id'].values)]
     # Identify rows that have been updated
     changes_mask = (updated_df.ne(original_df))  # Create a mask of changes
     updated_rows = updated_df[changes_mask.any(axis=1)]  # Select only changed rows
