@@ -7,6 +7,7 @@ import streamlit as st
 from st_aggrid import GridOptionsBuilder, GridUpdateMode, AgGrid
 
 from es_connector import wrapper
+from validator import SearchQueryMetaValidator
 
 OPERATION_LIMIT = 50
 
@@ -76,8 +77,13 @@ def handle_update():
                     # Store the earlier and updated values
                     changed_row[column] = {
                         'earlier_value': original_df.loc[index, column],
-                        'updated_value': updated_rows.loc[index, column]
+                        'new_value': updated_rows.loc[index, column]
                     }
+            failures = SearchQueryMetaValidator(updated_rows).validate()
+            for column, message in failures.items():
+                changed_row["error"] = message
+                st.session_state.all_valid_updates = False
+
             changed_info.append(changed_row)
         changed_df = pd.DataFrame(changed_info)
         st.write(changed_df)
@@ -125,6 +131,9 @@ def handle_update():
         # Add a Submit button
         if st.button("Submit Changes"):
             try:
+                if "all_valid_updates" in st.session_state and not st.session_state.all_valid_updates:
+                    st.error("Some updates are invalid. Please correct them before submitting.")
+                    return
                 wrapper.write_data(updated_rows)
                 st.rerun(scope="app")
             except Exception as e:
