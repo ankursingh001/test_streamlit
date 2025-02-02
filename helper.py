@@ -22,14 +22,16 @@ def get_grid_by_operation(operation):
     if not operation:
         operation = Action.UPDATE
     df = wrapper.get_df()
-    sel_mode = st.radio('Selection type', options=["single", "multiple"])
 
     gd = GridOptionsBuilder.from_dataframe(df)
     # Create a wrapper for the handle_pagination_change function to accept df
 
     gd.configure_pagination(enabled=False, paginationPageSize=st.session_state.page_size)
     gd.configure_default_column(editable=True, groupable=True, resizable=True, sortable=True, filter=True)
-    gd.configure_selection(selection_mode=sel_mode, use_checkbox=True)
+    if operation == Action.DELETE:
+        gd.configure_selection(selection_mode="multiple", use_checkbox=True)
+    else:
+        gd.configure_selection(selection_mode="multiple", use_checkbox=False)
 
     grid_options = gd.build()
 
@@ -69,8 +71,8 @@ def handle_update():
         # Prepare to store the changed values
         changed_info = []
         id_column = '_id'
-        for index in updated_rows.index:
-            changed_row = {id_column: updated_rows.loc[index, id_column]}  # Get the ID
+        for index, updated_row in updated_rows.iterrows():
+            changed_row = {id_column: updated_row[id_column]}  # Get the ID
             for column in updated_rows.columns:
                 # Check if the column has changed
                 if changes_mask.loc[index, column]:
@@ -79,7 +81,7 @@ def handle_update():
                         'earlier_value': original_df.loc[index, column],
                         'new_value': updated_rows.loc[index, column]
                     }
-            failures = SearchQueryMetaValidator(updated_rows).validate()
+            failures = SearchQueryMetaValidator().validate_row(updated_row)
             for column, message in failures.items():
                 changed_row["error"] = message
                 st.session_state.all_valid_updates = False

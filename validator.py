@@ -25,7 +25,7 @@ def is_string(x):
 
 
 def is_comma_separated_string(x):
-    return isinstance(x, str) and len(x.split(",")) > 1 if "," in x else False
+    return isinstance(x, str) and len(x.split(",")) > 1 if "," in x else True
 
 
 def is_dict(x):
@@ -113,21 +113,19 @@ class ValidationRule:
 
 class AbstractValidator(ABC):
     @abstractmethod
-    def validate(self, df):
+    def validate_row(self, df):
         pass
 
 
 class SearchQueryMetaValidator(AbstractValidator):
-    def __init__(self, df):
-        self.df = df
+    def __init__(self):
         self.validation_rules = ValidationRule()
         self.validation_rules.add_rules(search_query_meta_validation_rules())
 
-    def validate(self):
+    def validate_row(self, row):
         failures = {}
-        for index, row in self.df.iterrows():
-            for column_name, value in row.items():
-                failure = self.validation_rules.validate_column(column_name, value)
-                if failure:
-                    failures[column_name] = failure.get_failure_response()
+        for column_name, value in row.items():
+            failure = self.validation_rules.validate_column(column_name, value)
+            if failure:
+                failures[column_name] = failure.get_failure_response()
         return failures
